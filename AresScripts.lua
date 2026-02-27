@@ -115,35 +115,76 @@ local function closest(fov, pname, vischeck, tc)
     return best
 end
 
--- ─── INTRO SYSTEM ─────────────────────────────────────────────────────────────
+-- ─── INTRO SYSTEM (PEAK) ──────────────────────────────────────────────────────
 local function showIntro()
     local sg = Instance.new("ScreenGui")
     sg.Name = "AresIntro"; sg.DisplayOrder = 999
     pcall(function() sg.Parent = gethui() or game:GetService("CoreGui") or lp.PlayerGui end)
 
     local main = Instance.new("Frame")
-    main.Size = UDim2.new(1, 0, 1, 0); main.BackgroundColor3 = Color3.new(0,0,0); main.Parent = sg
+    main.Size = UDim2.new(1, 0, 1, 0); main.BackgroundColor3 = Color3.fromRGB(10, 5, 16); main.Parent = sg
+
+    -- Orbs (Particles)
+    local orbContainer = Instance.new("Frame")
+    orbContainer.Size = UDim2.new(1, 0, 1, 0); orbContainer.BackgroundTransparency = 1; orbContainer.Parent = main
+    task.spawn(function()
+        for i = 1, 40 do
+            local orb = Instance.new("Frame")
+            orb.Size = UDim2.new(0, math.random(4, 8), 0, math.random(4, 8))
+            orb.Position = UDim2.new(math.random(), 0, -0.1, 0)
+            orb.BackgroundColor3 = colors.accent
+            orb.BorderSizePixel = 0; orb.Parent = orbContainer
+            Instance.new("UICorner", orb).CornerRadius = UDim.new(1, 0)
+            
+            local t = math.random(3, 7)
+            TweenSvc:Create(orb, TweenInfo.new(t, Enum.EasingStyle.Linear), {Position = UDim2.new(orb.Position.X.Scale, 0, 1.1, 0), BackgroundTransparency = 1}):Play()
+            task.wait(0.1)
+        end
+    end)
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 100); title.Position = UDim2.new(0, 0, 0.4, 0); title.BackgroundTransparency = 1
-    title.Text = "ARES HUB"; title.TextColor3 = colors.accent; title.Font = Enum.Font.GothamBold; title.TextSize = 60; title.Parent = main
+    title.Size = UDim2.new(1, 0, 0, 100); title.Position = UDim2.new(0, 0, 0.45, -50); title.BackgroundTransparency = 1
+    title.Text = "ARES SCRIPTS"; title.TextColor3 = Color3.new(1, 1, 1); title.Font = Enum.Font.GothamBold; title.TextSize = 50; title.Parent = main
     title.TextTransparency = 1
+    
+    local shadow = Instance.new("TextLabel")
+    shadow.Size = title.Size; shadow.Position = title.Position + UDim2.new(0, 4, 0, 4); shadow.BackgroundTransparency = 1
+    shadow.Text = title.Text; shadow.TextColor3 = colors.accent; shadow.Font = title.Font; shadow.TextSize = title.TextSize; shadow.Parent = main
+    shadow.TextTransparency = 1; shadow.ZIndex = title.ZIndex - 1
 
     local barBg = Instance.new("Frame")
-    barBg.Size = UDim2.new(0, 300, 0, 4); barBg.Position = UDim2.new(0.5, -150, 0.5, 50); barBg.BackgroundColor3 = colors.card; barBg.BorderSizePixel = 0; barBg.Parent = main
+    barBg.Size = UDim2.new(0, 350, 0, 3); barBg.Position = UDim2.new(0.5, -175, 0.5, 60); barBg.BackgroundColor3 = colors.card; barBg.BorderSizePixel = 0; barBg.Parent = main
     
     local bar = Instance.new("Frame")
     bar.Size = UDim2.new(0, 0, 1, 0); bar.BackgroundColor3 = colors.accent; bar.BorderSizePixel = 0; bar.Parent = barBg
+    
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, 0, 0, 20); status.Position = UDim2.new(0, 0, 0.5, 75); status.BackgroundTransparency = 1
+    status.Text = "Initializing..."; status.TextColor3 = colors.dim; status.Font = Enum.Font.Gotham; status.TextSize = 12; status.Parent = main
 
     TweenSvc:Create(title, TweenInfo.new(1), {TextTransparency = 0}):Play()
+    TweenSvc:Create(shadow, TweenInfo.new(1.2), {TextTransparency = 0.5}):Play()
+    
+    local loadingSteps = {
+        {p = 0.2, t = "Connecting to ARES Network..."},
+        {p = 0.45, t = "Authenticating Session..."},
+        {p = 0.7, t = "Injecting Universal Hooks..."},
+        {p = 1.0, t = "Ready."}
+    }
+
+    for _, step in ipairs(loadingSteps) do
+        status.Text = step.t
+        TweenSvc:Create(bar, TweenInfo.new(1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(step.p, 0, 1, 0)}):Play()
+        task.wait(1)
+    end
+
     task.wait(0.5)
-    TweenSvc:Create(bar, TweenInfo.new(2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)}):Play()
-    task.wait(2.2)
-    TweenSvc:Create(title, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-    TweenSvc:Create(barBg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    TweenSvc:Create(bar, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-    TweenSvc:Create(main, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
-    task.wait(0.8)
+    TweenSvc:Create(main, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    for _, v in pairs(main:GetDescendants()) do
+        if v:IsA("TextLabel") then TweenSvc:Create(v, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+        elseif v:IsA("Frame") then TweenSvc:Create(v, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play() end
+    end
+    task.wait(1)
     sg:Destroy()
 end
 
@@ -171,10 +212,11 @@ Run.Heartbeat:Connect(function()
     end
 end)
 
--- ─── Combat Hooks ─────────────────────────────────────────────────────────────
+-- ─── Combat Hooks (Hardened) ──────────────────────────────────────────────────
 local function applyCombatHooks()
     local oldNamecall
     oldNamecall = hookmethod(game, "__namecall", function(self, ...)
+        if checkcaller() then return oldNamecall(self, ...) end
         local method = getnamecall()
         local args = {...}
         
@@ -194,7 +236,8 @@ local function applyCombatHooks()
 
     local oldIndex
     oldIndex = hookmethod(game, "__index", function(self, k)
-        if not checkcaller() and (S.SilentOn or S.MagicBullet) then
+        if checkcaller() then return oldIndex(self, k) end
+        if (S.SilentOn or S.MagicBullet) then
             if self == lp:GetMouse() and (k == "Hit" or k == "Target") then
                 local target = closest(S.SilentFOV, S.AimbotPart, not S.MagicBullet, S.SilentTeam)
                 if target then
@@ -286,30 +329,16 @@ RS.RenderStepped:Connect(function()
     end
 end)
 
--- ─── CUSTOM CURSOR ────────────────────────────────────────────────────────────
-local function createCursor()
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "AresCursor"; sg.DisplayOrder = 1000
-    pcall(function() sg.Parent = gethui() or game:GetService("CoreGui") or lp.PlayerGui end)
-
-    local cursor = Instance.new("Frame")
-    cursor.Size = UDim2.new(0, 0, 0, 0); cursor.BackgroundTransparency = 1; cursor.Parent = sg
-
-    local line1 = Instance.new("Frame")
-    line1.Size = UDim2.new(0, 20, 0, 2); line1.Position = UDim2.new(0, -10, 0, -1); line1.BackgroundColor3 = colors.accent; line1.Rotation = 45; line1.BorderSizePixel = 0; line1.Parent = cursor
-    local line2 = Instance.new("Frame")
-    line2.Size = UDim2.new(0, 20, 0, 2); line2.Position = UDim2.new(0, -10, 0, -1); line2.BackgroundColor3 = colors.accent; line2.Rotation = -45; line2.BorderSizePixel = 0; line2.Parent = cursor
-
-    Instance.new("UIStroke", line1).Color = Color3.new(0,0,0)
-    Instance.new("UIStroke", line2).Color = Color3.new(0,0,0)
-
+-- ─── CURSOR SYSTEM ────────────────────────────────────────────────────────────
+local function updateCursor()
     Run.RenderStepped:Connect(function()
-        local mPos = UIS:GetMouseLocation()
-        cursor.Position = UDim2.new(0, mPos.X, 0, mPos.Y - 36)
-        cursor.Visible = sg.Parent.Parent:FindFirstChild("AresV5").Main.Visible
-        UIS.MouseIconEnabled = not cursor.Visible
+        local mainFrame = sg:FindFirstChild("Main")
+        if mainFrame and mainFrame.Visible then
+            lp:GetMouse().Icon = "rbxassetid://12513364998" -- Modern 'X' Cursor Asset
+        else
+            lp:GetMouse().Icon = ""
+        end
     end)
-    return sg
 end
 
 -- ─── UI LIBRARY (GRAY/BLACK) ──────────────────────────────────────────────────
@@ -456,31 +485,59 @@ function UI:Create(name)
     return main
 end
 
--- ─── AUTH SYSTEM ──────────────────────────────────────────────────────────────
+-- ─── AUTH SYSTEM (RIVALS STYLE) ───────────────────────────────────────────────
 local function showAuth(main)
     local overlay = Instance.new("Frame")
-    overlay.Size = UDim2.new(1, 0, 1, 0); overlay.BackgroundColor3 = Color3.new(0,0,0); overlay.BackgroundTransparency = 0.5; overlay.ZIndex = 100; overlay.Parent = main
+    overlay.Size = UDim2.new(1, 0, 1, 0); overlay.BackgroundColor3 = Color3.fromRGB(10, 5, 16); overlay.BackgroundTransparency = 0.2; overlay.ZIndex = 100; overlay.Parent = main
+    
     local box = Instance.new("Frame")
-    box.Size = UDim2.new(0, 300, 0, 180); box.Position = UDim2.new(0.5, -150, 0.5, -90); box.BackgroundColor3 = colors.bg; box.BorderSizePixel = 0; box.Parent = overlay
+    box.Size = UDim2.new(0, 320, 0, 200); box.Position = UDim2.new(0.5, -160, 0.5, -100); box.BackgroundColor3 = colors.bg; box.BorderSizePixel = 0; box.Parent = overlay
     Instance.new("UIStroke", box).Color = colors.accent
-    local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, 0, 0, 40); lbl.Text = "ARES V5 AUTHENTICATION"; lbl.TextColor3 = colors.accent; lbl.Font = Enum.Font.RobotoMono; lbl.TextSize = 14; lbl.BackgroundTransparency = 1; lbl.Parent = box
-    local keyIn = Instance.new("TextBox"); keyIn.Size = UDim2.new(0.8, 0, 0, 30); keyIn.Position = UDim2.new(0.1, 0, 0.4, 0); keyIn.BackgroundColor3 = colors.card; keyIn.Text = ""; keyIn.PlaceholderText = "Enter Key..."; keyIn.TextColor3 = colors.text; keyIn.Parent = box
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+
+    local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, 0, 0, 50); lbl.Text = "ARES PRO AUTH"; lbl.TextColor3 = colors.accent; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 18; lbl.BackgroundTransparency = 1; lbl.Parent = box
+    
+    local keyIn = Instance.new("TextBox"); keyIn.Size = UDim2.new(0.8, 0, 0, 35); keyIn.Position = UDim2.new(0.1, 0, 0.4, 0); keyIn.BackgroundColor3 = colors.card; keyIn.Text = ""; keyIn.PlaceholderText = "Enter License Key..."; keyIn.TextColor3 = colors.text; keyIn.Parent = box
     Instance.new("UIStroke", keyIn).Color = colors.border
-    local btn = Instance.new("TextButton"); btn.Size = UDim2.new(0.4, 0, 0, 30); btn.Position = UDim2.new(0.3, 0, 0.7, 0); btn.BackgroundColor3 = colors.card; btn.Text = "VALIDATE"; btn.TextColor3 = colors.text; btn.Parent = box
+    Instance.new("UICorner", keyIn).CornerRadius = UDim.new(0, 4)
+
+    local btn = Instance.new("TextButton"); btn.Size = UDim2.new(0.8, 0, 0, 35); btn.Position = UDim2.new(0.1, 0, 0.7, 0); btn.BackgroundColor3 = colors.accent; btn.Text = "VALIDATE LICENSE"; btn.TextColor3 = Color3.new(1,1,1); btn.Font = Enum.Font.GothamBold; btn.Parent = box
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    
+    local status = Instance.new("TextLabel"); status.Size = UDim2.new(1, 0, 0, 20); status.Position = UDim2.new(0, 0, 0.9, 0); status.BackgroundTransparency = 1; status.Text = ""; status.TextColor3 = Color3.fromRGB(255, 50, 50); status.Font = Enum.Font.Gotham; status.TextSize = 11; status.Parent = box
+
     btn.MouseButton1Click:Connect(function()
+        local key = keyIn.Text
+        if key == "" then return end
+        status.Text = "Authenticating..."
+        status.TextColor3 = colors.dim
+        
         local req = (request or syn.request or http.request)
-        if not req then overlay:Destroy() return end
+        if not req then overlay:Destroy(); _G.AresPremium = true; return end
+        
         task.spawn(function()
-            local success, res = pcall(function() return req({ Url = "http://127.0.0.1:8080/validate", Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpSvc:JSONEncode({key = keyIn.Text, hwid = "HWID"})}) end)
-            if success and res.StatusCode == 200 then overlay:Destroy() else lbl.Text = "INVALID KEY" end
+            local success, res = pcall(function() return req({ Url = "http://127.0.0.1:8080/validate", Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpSvc:JSONEncode({key = key, hwid = "USER_HWID"})}) end)
+            if success and res.StatusCode == 200 then 
+                local data = HttpSvc:JSONDecode(res.Body)
+                if data.valid then
+                    status.Text = "License Verified!"; status.TextColor3 = colors.success
+                    task.wait(1); overlay:Destroy(); _G.AresPremium = true
+                else
+                    status.Text = "Invalid License Key"; status.TextColor3 = Color3.fromRGB(255, 50, 50)
+                end
+            else 
+                status.Text = "Error Connecting to Auth Server"; status.TextColor3 = Color3.fromRGB(255, 50, 50)
+            end
         end)
     end)
 end
 
 -- ─── INIT ─────────────────────────────────────────────────────────────────────
+-- ─── INIT ─────────────────────────────────────────────────────────────────────
 task.spawn(showIntro)
-createCursor()
 local main = UI:Create("AresV5")
+updateCursor()
+
 local combat = UI:Tab("Combat")
 combat:Section("COMBAT")
 combat:Toggle("Aimbot", "AimbotOn"); combat:Slider("Smoothness", "Smooth", 1, 30)
@@ -499,10 +556,18 @@ move:Toggle("Enable Speed", "WalkSpeedOn"); move:Slider("WalkSpeed", "WalkSpeed"
 move:Toggle("Enable Jump", "JumpPowerOn"); move:Slider("JumpPower", "JumpPower", 50, 400)
 move:Toggle("Fly", "FlyOn"); move:Slider("Fly Speed", "FlySpeed", 10, 300)
 
+local prem = UI:Tab("Premium")
+prem:Section("PREMIUM EXCLUSIVES")
+prem:Toggle("Magic Bullet", "MagicBullet")
+prem:Toggle("Hitbox Expander", "HitboxExpander")
+prem:Slider("Hitbox Size", "HitboxSize", 1, 20)
+prem:Toggle("Anti-Aim", "AntiAim")
+prem:Toggle("Spinbot", "Spinbot")
+prem:Toggle("Auto-Shoot", "AutoShoot")
+
 local rage = UI:Tab("Rage")
 rage:Section("RAGE")
-rage:Toggle("Spinbot", "Spinbot"); rage:Toggle("Anti-Aim", "AntiAim"); rage:Toggle("Jitter", "Jitter")
-rage:Toggle("Magic Bullet", "MagicBullet"); rage:Toggle("Hitbox Expander", "HitboxExpander"); rage:Slider("Hitbox Size", "HitboxSize", 1, 20)
+rage:Toggle("Jitter", "Jitter")
 
 if not _G.AresPremium then showAuth(main) end
 print("ARES HUB V5 LOADED")
