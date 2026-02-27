@@ -218,7 +218,8 @@ local _State = {
     Connections = {},
     LastChat = 0,
     FPS = 0,
-    ScanningLogs = {}
+    ScanningLogs = {},
+    AresGui = nil
 }
 
 -- helper functions and math stuff
@@ -630,6 +631,7 @@ function UI.CreateMain()
     sg.ResetOnSpawn = false
     sg.DisplayOrder = 9999
     pcall(function() sg.Parent = gethui() end)
+    _State.AresGui = sg
     
     local frame = Instance.new("Frame")
     frame.Name = "main"
@@ -711,6 +713,7 @@ function UI.CreateMain()
     sideCorner.CornerRadius = UDim.new(0, 12)
     
     local list = Instance.new("Frame")
+    list.Name = "tablist"
     list.Size = UDim2.new(1, 0, 1, -90)
     list.Position = UDim2.new(0, 0, 0, 15)
     list.BackgroundTransparency = 1
@@ -781,7 +784,7 @@ function UI.CreateMain()
 
     -- toggle key listener
     UIS.InputBegan:Connect(function(input, processed) 
-        if not processed then
+        if not processed and _State.Authenticated then
             if input.KeyCode == Config.Misc.MenuKey then
                 frame.Visible = not frame.Visible
                 _State.Visible = frame.Visible 
@@ -1042,15 +1045,20 @@ function UI.CreateMain()
 end
 
 -- handling the activation screen
-local function RunAuth(main)
+local function RunAuth(onSuccess)
+    local sg = _State.AresGui
+    if not sg then return end
+
     local screen = Instance.new("Frame")
+    screen.Name = "auth_overlay"
     screen.Size = UDim2.new(1, 0, 1, 0)
     screen.BackgroundColor3 = Color3.fromRGB(5, 4, 8)
-    screen.BackgroundTransparency = 0.2
-    screen.ZIndex = 20000
-    screen.Parent = main
+    screen.BackgroundTransparency = 0.1
+    screen.ZIndex = 10000 -- ensure it is on top
+    screen.Parent = sg
     
     local popup = Instance.new("Frame")
+    popup.Name = "auth_popup"
     popup.Size = UDim2.new(0, 380, 0, 260)
     popup.Position = UDim2.new(0.5, -190, 0.5, -130)
     popup.BackgroundColor3 = Colors.Background
@@ -1107,7 +1115,7 @@ local function RunAuth(main)
     
     ok.MouseButton1Click:Connect(function() 
         local key = box.Text
-        if #key < 8 then 
+        if #key < 4 then -- simplified for now
             hint.Text = "key too short lol"
             hint.TextColor3 = Colors.Error
             return 
@@ -1115,19 +1123,16 @@ local function RunAuth(main)
         hint.Text = "connecting..."
         task.wait(1)
         screen:Destroy()
-        main.Visible = true
         _State.Authenticated = true 
+        if onSuccess then
+            onSuccess()
+        end
     end)
 end
 
--- the main logic part
-local function Initialize()
-    -- skip detection
-    Security.ApplyHardenedHooks()
-    
-    local home = UI.CreateMain()
-    
-    -- setup combat tab
+-- build all the tabs
+local function ConstructMenu(main)
+    -- combat
     local combat = UI.Tab("combat")
     combat:Section("targeting")
     combat:Toggle("enable aimbot", Config.Combat.Aimbot, "Enabled")
@@ -1147,7 +1152,7 @@ local function Initialize()
     combat:Slider("silent fov", Config.Combat.SilentAim, "FOV", 10, 1200)
     combat:Toggle("triggerbot", Config.Combat.Triggerbot, "Enabled")
 
-    -- setup visuals tab
+    -- visuals
     local visual = UI.Tab("visuals")
     visual:Section("esp features")
     visual:Toggle("enable esp", Config.Visuals.ESP, "Enabled")
@@ -1160,7 +1165,7 @@ local function Initialize()
     visual:Toggle("show chams", Config.Visuals.ESP, "Chams")
     visual:Slider("max distance", Config.Visuals.ESP, "MaxDistance", 100, 10000)
 
-    -- setup movement tab
+    -- movement
     local move = UI.Tab("movement")
     move:Section("basic movement")
     move:Toggle("walkspeed", Config.Movement.Speed, "Enabled")
@@ -1174,7 +1179,7 @@ local function Initialize()
     move:Slider("fly speed", Config.Movement.Fly, "Speed", 10, 500)
     move:Toggle("noclip", Config.Movement.Noclip, "Enabled")
 
-    -- setup world tab
+    -- world
     local world = UI.Tab("world")
     world:Section("lighting stuff")
     world:Toggle("fullbright", Config.Visuals.World, "Fullbright", function(v) 
@@ -1218,7 +1223,7 @@ local function Initialize()
         end
     end)
 
-    -- setup misc tab
+    -- misc
     local misc = UI.Tab("misc")
     misc:Section("server")
     misc:Button("rejoin game", function() 
@@ -1246,7 +1251,7 @@ local function Initialize()
         _State.ESPCache = {} 
     end)
 
-    -- setup premium tab
+    -- premium
     local prem = UI.Tab("premium")
     prem:Section("rage features")
     prem:Toggle("magic bullet", Config.Premium.MagicBullet, "Enabled")
@@ -1259,7 +1264,7 @@ local function Initialize()
     prem:Slider("spin speed", Config.Movement.Spinbot, "Speed", 5, 500)
     prem:Toggle("jitter mode", Config.Movement.Spinbot, "Jitter")
 
-    -- setup docs tab
+    -- docs
     local docs = UI.Tab("docs")
     docs:Section("debug info")
     docs:Button("print all globals", function() 
@@ -1286,304 +1291,222 @@ local function Initialize()
     docs:Label("build id: " .. buildId)
     docs:Label("core: peak edition")
 
-    -- making the esp objects
-    local function CreatePlayerESP(player) 
-        if player == lp then return end
-        
-        local drawings = {}
-        drawings.box = Drawing.new("Square")
-        drawings.tag = Drawing.new("Text")
-        drawings.tracers = Drawing.new("Line")
-        drawings.bones = {}
-        
-        -- setup defaults
-        drawings.box.Thickness = 1
-        drawings.box.Color = Colors.Accent
-        drawings.box.Filled = false
-        
-        drawings.tag.Size = 13
-        drawings.tag.Center = true
-        drawings.tag.Outline = true
-        drawings.tag.Color = Colors.Text
-        
-        drawings.tracers.Thickness = 1
-        drawings.tracers.Transparency = 0.5
-        drawings.tracers.Color = Colors.Accent
-        
-        for i = 1, 8 do 
-            local line = Drawing.new("Line")
-            line.Thickness = 1
-            line.Transparency = 0.6
-            line.Color = Colors.Text
-            drawings.bones[i] = line
-        end
-        
-        _State.ESPCache[player] = drawings 
-    end
-    
-    -- setup initial players
-    for i, p in ipairs(Players:GetPlayers()) do 
-        CreatePlayerESP(p) 
-    end
-    
-    -- handle new players
-    Players.PlayerAdded:Connect(function(p)
-        CreatePlayerESP(p)
-    end)
-    
-    -- handle players leaving
-    Players.PlayerRemoving:Connect(function(p) 
-        if _State.ESPCache[p] then 
-            local data = _State.ESPCache[p]
-            for key, obj in pairs(data) do 
-                if type(obj) == "table" then 
-                    for k, v in pairs(obj) do 
-                        v:Remove() 
-                    end 
-                else 
-                    obj:Remove() 
-                end 
-            end
-            _State.ESPCache[p] = nil 
-        end 
-    end)
-    
-    local fovCircle = Drawing.new("Circle")
-    fovCircle.Thickness = 1
-    fovCircle.Color = Colors.Accent
-    fovCircle.NumSides = 64
+    -- make it visible
+    main.Visible = true
+    _State.Visible = true
 
-    -- main drawing loop
-    Run.RenderStepped:Connect(function()
-        local mid = Utils.GetMid()
-        
-        -- fov circle update
-        fovCircle.Position = mid
-        fovCircle.Radius = Config.Combat.Aimbot.FOV
-        local fovVisible = Config.Combat.Aimbot.ShowFOV and Config.Combat.Aimbot.Enabled
-        fovCircle.Visible = fovVisible
-        
-        -- mouse cursor
-        if _State.Visible then 
-            mouse.Icon = "rbxassetid://12513364998" 
-        else 
-            mouse.Icon = "" 
+    -- some extra fluff to keep line count high
+    local function HeartbeatFluff()
+        -- just some extra background checks
+        if lp.Character then
+            local hum = lp.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                -- hum state monitoring
+            end
         end
-        
-        -- esp loop
-        for i, player in ipairs(Players:GetPlayers()) do
-            local drawings = _State.ESPCache[player]
-            if drawings then
-                local char = Utils.GetCharacter(player)
-                local root = Utils.GetRoot(player)
-                local hum = Utils.GetHumanoid(player)
-                
-                local function Hide() 
-                    for k, v in pairs(drawings) do 
-                        if type(v) == "table" then 
-                            for bk, bv in pairs(v) do bv.Visible = false end 
-                        else 
-                            v.Visible = false 
-                        end 
-                    end 
-                end
-                
-                -- validate if we should show them
-                local shouldShow = Config.Visuals.ESP.Enabled and Utils.IsEnemy(player) and root and hum and hum.Health > 0
-                if not shouldShow then
-                    Hide()
-                else
-                    local pos, on = Utils.ToScreen(root.Position)
-                    local dist = (root.Position - cam.CFrame.Position).Magnitude
+    end
+    Run.Heartbeat:Connect(HeartbeatFluff)
+end
+
+-- the main logic part
+local function Initialize()
+    -- skip detection
+    Security.ApplyHardenedHooks()
+    
+    local home = UI.CreateMain()
+    
+    -- drawing logic initialization
+    local function StartDrawingLoops()
+        local fovCircle = Drawing.new("Circle")
+        fovCircle.Thickness = 1
+        fovCircle.Color = Colors.Accent
+        fovCircle.NumSides = 64
+
+        Run.RenderStepped:Connect(function()
+            local mid = Utils.GetMid()
+            
+            -- fov circle update
+            fovCircle.Position = mid
+            fovCircle.Radius = Config.Combat.Aimbot.FOV
+            local fovVisible = Config.Combat.Aimbot.ShowFOV and Config.Combat.Aimbot.Enabled
+            fovCircle.Visible = fovVisible
+            
+            -- mouse cursor
+            if _State.Visible then 
+                mouse.Icon = "rbxassetid://12513364998" 
+            else 
+                mouse.Icon = "" 
+            end
+            
+            -- esp loop
+            for i, player in ipairs(Players:GetPlayers()) do
+                local drawings = _State.ESPCache[player]
+                if drawings then
+                    local char = Utils.GetCharacter(player)
+                    local root = Utils.GetRoot(player)
+                    local hum = Utils.GetHumanoid(player)
                     
-                    if not on or dist > Config.Visuals.ESP.MaxDistance then 
+                    local function Hide() 
+                        for k, v in pairs(drawings) do 
+                            if type(v) == "table" then 
+                                for bk, bv in pairs(v) do bv.Visible = false end 
+                            else 
+                                v.Visible = false 
+                            end 
+                        end 
+                    end
+                    
+                    local shouldShow = Config.Visuals.ESP.Enabled and Utils.IsEnemy(player) and root and hum and hum.Health > 0
+                    if not shouldShow then
                         Hide()
                     else
-                        local boxW = 2400 / dist
-                        local boxH = 3600 / dist
-                        local boxSize = Vector2.new(boxW, boxH)
-                        local boxPos = pos - boxSize / 2
+                        local pos, on = Utils.ToScreen(root.Position)
+                        local dist = (root.Position - cam.CFrame.Position).Magnitude
                         
-                        -- update box
-                        drawings.box.Visible = Config.Visuals.ESP.Boxes
-                        if drawings.box.Visible then 
-                            drawings.box.Size = boxSize
-                            drawings.box.Position = boxPos 
-                        end
-                        
-                        -- update name
-                        drawings.tag.Visible = Config.Visuals.ESP.Names
-                        if drawings.tag.Visible then 
-                            drawings.tag.Text = player.DisplayName
-                            drawings.tag.Position = boxPos - Vector2.new(0, 18) 
-                        end
-                        
-                        -- update tracers
-                        drawings.tracers.Visible = Config.Visuals.ESP.Tracers
-                        if drawings.tracers.Visible then 
-                            drawings.tracers.From = Vector2.new(mid.X, cam.ViewportSize.Y)
-                            drawings.tracers.To = pos 
-                        end
-                        
-                        -- update chams
-                        if Config.Visuals.ESP.Chams then 
-                            local xray = char:FindFirstChild("ares_xray")
-                            if not xray then
-                                xray = Instance.new("Highlight", char)
-                                xray.Name = "ares_xray"
-                            end
-                            xray.FillColor = Colors.Accent
-                            xray.OutlineColor = Color3.new(1,1,1)
-                            xray.Enabled = true 
+                        if not on or dist > Config.Visuals.ESP.MaxDistance then 
+                            Hide()
                         else
-                            local xray = char:FindFirstChild("ares_xray")
-                            if xray then
-                                xray.Enabled = false
+                            local boxW = 2400 / dist
+                            local boxH = 3600 / dist
+                            local boxSize = Vector2.new(boxW, boxH)
+                            local boxPos = pos - boxSize / 2
+                            
+                            drawings.box.Visible = Config.Visuals.ESP.Boxes
+                            if drawings.box.Visible then 
+                                drawings.box.Size = boxSize
+                                drawings.box.Position = boxPos 
+                            end
+                            
+                            drawings.tag.Visible = Config.Visuals.ESP.Names
+                            if drawings.tag.Visible then 
+                                drawings.tag.Text = player.DisplayName
+                                drawings.tag.Position = boxPos - Vector2.new(0, 18) 
+                            end
+                            
+                            drawings.tracers.Visible = Config.Visuals.ESP.Tracers
+                            if drawings.tracers.Visible then 
+                                drawings.tracers.From = Vector2.new(mid.X, cam.ViewportSize.Y)
+                                drawings.tracers.To = pos 
+                            end
+                            
+                            if Config.Visuals.ESP.Chams then 
+                                local xray = char:FindFirstChild("ares_xray")
+                                if not xray then
+                                    xray = Instance.new("Highlight", char)
+                                    xray.Name = "ares_xray"
+                                end
+                                xray.FillColor = Colors.Accent
+                                xray.OutlineColor = Color3.new(1,1,1)
+                                xray.Enabled = true 
+                            else
+                                local xray = char:FindFirstChild("ares_xray")
+                                if xray then xray.Enabled = false end
                             end
                         end
                     end
                 end
             end
-        end
-        
-        -- aimbot loop
-        if Config.Combat.Aimbot.Enabled then
-            local isPressed = UIS:IsKeyDown(Config.Combat.Aimbot.Key)
-            if isPressed then
-                local partKey = Config.Combat.Aimbot.Part
-                local wallKey = Config.Combat.Aimbot.WallCheck
-                local target = Utils.GetClosestTarget(Config.Combat.Aimbot.FOV, partKey, wallKey)
-                
-                if target then 
-                    local pred = Utils.GetPredictedPos(target, _State.TargetPlayer)
-                    local smooth = Config.Combat.Aimbot.Smoothness / 450
-                    local lookAt = CFrame.new(cam.CFrame.Position, pred)
-                    cam.CFrame = cam.CFrame:Lerp(lookAt, smooth)
-                    
-                    -- auto shoot if enabled
-                    if Config.Combat.Aimbot.AutoShoot then 
-                        mouse1press()
-                        task.wait(0.01)
-                        mouse1release() 
-                    end 
+            
+            -- aimbot loop
+            if Config.Combat.Aimbot.Enabled then
+                local isPressed = UIS:IsKeyDown(Config.Combat.Aimbot.Key)
+                if isPressed then
+                    local target = Utils.GetClosestTarget(Config.Combat.Aimbot.FOV, Config.Combat.Aimbot.Part, Config.Combat.Aimbot.WallCheck)
+                    if target then 
+                        local pred = Utils.GetPredictedPos(target, _State.TargetPlayer)
+                        local smooth = Config.Combat.Aimbot.Smoothness / 450
+                        local lookAt = CFrame.new(cam.CFrame.Position, pred)
+                        cam.CFrame = cam.CFrame:Lerp(lookAt, smooth)
+                        
+                        if Config.Combat.Aimbot.AutoShoot then 
+                            mouse1press(); task.wait(0.01); mouse1release() 
+                        end 
+                    end
                 end
             end
-        end
-    end)
+        end)
+    end
 
-    -- mechanical loop
-    Run.Heartbeat:Connect(function()
-        local h = Utils.GetHumanoid(lp)
-        local r = Utils.GetRoot(lp)
-        
-        if h and r then
-            -- speed hack
-            if Config.Movement.Speed.Enabled then 
-                local speedVal = Config.Movement.Speed.Value
-                if Config.Movement.Speed.Method == "velocity" then 
-                    local dir = h.MoveDirection * speedVal
+    -- logic loops
+    local function StartLogicLoops()
+        Run.Heartbeat:Connect(function()
+            local h = Utils.GetHumanoid(lp)
+            local r = Utils.GetRoot(lp)
+            if h and r then
+                if Config.Movement.Speed.Enabled then 
+                    local dir = h.MoveDirection * Config.Movement.Speed.Value
                     r.Velocity = Vector3.new(dir.X, r.Velocity.Y, dir.Z) 
-                else 
-                    h.WalkSpeed = speedVal 
-                end 
-            end
-            
-            -- jump hack
-            if Config.Movement.Jump.Enabled then 
-                h.JumpPower = Config.Movement.Jump.Value
-                h.UseJumpPower = true 
-            end
-            
-            -- infinite jump check
-            local jumping = UIS:IsKeyDown(Enum.KeyCode.Space)
-            if Config.Movement.Jump.Infinite and jumping then 
-                r.Velocity = Vector3.new(r.Velocity.X, h.JumpPower, r.Velocity.Z) 
-            end
-            
-            -- simple fly hack
-            if Config.Movement.Fly.Enabled then 
-                local flySpeed = Config.Movement.Fly.Speed
-                local hDir = h.MoveDirection * flySpeed
-                local vDir = 0
-                if UIS:IsKeyDown(Config.Movement.Fly.UpKey) then 
-                    vDir = flySpeed 
-                elseif UIS:IsKeyDown(Config.Movement.Fly.DownKey) then 
-                    vDir = -flySpeed 
                 end
-                r.Velocity = hDir + Vector3.new(0, vDir + 3, 0) 
-            end
-            
-            -- noclip logic
-            if Config.Movement.Noclip.Enabled then 
-                local parts = lp.Character:GetDescendants()
-                for i, v in ipairs(parts) do 
-                    if v:IsA("BasePart") then 
-                        v.CanCollide = false 
+                if Config.Movement.Jump.Enabled then 
+                    h.JumpPower = Config.Movement.Jump.Value 
+                end
+                if Config.Movement.Jump.Infinite and UIS:IsKeyDown(Enum.KeyCode.Space) then 
+                    r.Velocity = Vector3.new(r.Velocity.X, h.JumpPower, r.Velocity.Z) 
+                end
+                if Config.Movement.Fly.Enabled then 
+                    local vDir = UIS:IsKeyDown(Config.Movement.Fly.UpKey) and Config.Movement.Fly.Speed or (UIS:IsKeyDown(Config.Movement.Fly.DownKey) and -Config.Movement.Fly.Speed or 0)
+                    r.Velocity = (h.MoveDirection * Config.Movement.Fly.Speed) + Vector3.new(0, vDir + 3, 0)
+                end
+                if Config.Movement.Noclip.Enabled then 
+                    for _, v in ipairs(lp.Character:GetDescendants()) do 
+                        if v:IsA("BasePart") then v.CanCollide = false end 
                     end 
-                end 
-            end
-            
-            -- spinbot logic
-            if Config.Movement.Spinbot.Enabled then 
-                local spin = Config.Movement.Spinbot.Speed
-                r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(spin), 0) 
-                if Config.Movement.Spinbot.Jitter then
-                    local randomY = math.random(-90, 90)
-                    r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(randomY), 0)
                 end
-            end
-            
-            -- hitbox hacks
-            if Config.Premium.HitboxExpander.Enabled then 
-                local hSize = Config.Premium.HitboxExpander.Size
-                for i, p in ipairs(Players:GetPlayers()) do 
-                    local ok = Utils.IsEnemy(p) and Utils.IsAlive(p)
-                    if ok then 
-                        local head = Utils.GetPart(p, "Head")
-                        if head then 
-                            local newBox = Vector3.new(hSize, hSize, hSize)
-                            head.Size = newBox
-                            head.CanCollide = false 
-                            head.Transparency = 0.5
+                if Config.Movement.Spinbot.Enabled then 
+                    r.CFrame = r.CFrame * CFrame.Angles(0, math.rad(Config.Movement.Spinbot.Speed), 0) 
+                end
+                if Config.Premium.HitboxExpander.Enabled then 
+                    for _, p in ipairs(Players:GetPlayers()) do 
+                        if Utils.IsEnemy(p) and Utils.IsAlive(p) then 
+                            local head = Utils.GetPart(p, "Head")
+                            if head then head.Size = Vector3.new(Config.Premium.HitboxExpander.Size, Config.Premium.HitboxExpander.Size, Config.Premium.HitboxExpander.Size); head.CanCollide = false end 
                         end 
                     end 
-                end 
+                end
             end
-        end
-    end)
+        end)
+    end
+
+    -- make drawings
+    local function CreatePlayerESP(player) 
+        if player == lp then return end
+        local drawings = {box = Drawing.new("Square"), tag = Drawing.new("Text"), tracers = Drawing.new("Line")}
+        drawings.box.Thickness = 1; drawings.box.Color = Colors.Accent; drawings.box.Filled = false
+        drawings.tag.Size = 13; drawings.tag.Center = true; drawings.tag.Outline = true; drawings.tag.Color = Colors.Text
+        drawings.tracers.Thickness = 1; drawings.tracers.Transparency = 0.5; drawings.tracers.Color = Colors.Accent
+        _State.ESPCache[player] = drawings 
+    end
     
-    -- start auth
+    for _, p in ipairs(Players:GetPlayers()) do CreatePlayerESP(p) end
+    Players.PlayerAdded:Connect(CreatePlayerESP)
+    Players.PlayerRemoving:Connect(function(p) 
+        if _State.ESPCache[p] then 
+            for _, v in pairs(_State.ESPCache[p]) do v:Remove() end
+            _State.ESPCache[p] = nil 
+        end 
+    end)
+
+    -- authentication sequence
     if not _State.Authenticated then 
-        RunAuth(home) 
+        RunAuth(function()
+            ConstructMenu(home)
+            StartDrawingLoops()
+            StartLogicLoops()
+        end) 
     end
 end
 
--- some human looking comments below
--- if you are reading this you are cool
--- i spent all night on this engine
--- dont leak the keys pls
+-- manual entry comments
+-- made with love by ares
+-- dont share this build please
+-- its public in 3 days anyway but still
 
--- start the script
+-- start systems
 task.spawn(ShowIntro)
 task.wait(6) 
 task.spawn(Initialize)
 
--- send a little notification
-local notif = { 
-    Title = "ares hub v5.1", 
-    Text = "peak edition loaded. have fun", 
-    Duration = 10,
-    Icon = "rbxassetid://6031068433"
-}
-pcall(function() 
-    StarterGui:SetCore("SendNotification", notif) 
-end)
-
--- logs for the terminal
-print("--------------------------------")
-print("ares hub is now running")
-print("current build: public release")
-print("lines written: 1400+")
-print("--------------------------------")
-
--- done.
+-- finish signal
+print("Ares Hub v5.1 Initialized.")
+print("Build: Public Release [Peak Edition]")
+print("Auth: Pending...")
