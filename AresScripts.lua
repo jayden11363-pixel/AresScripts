@@ -286,6 +286,32 @@ RS.RenderStepped:Connect(function()
     end
 end)
 
+-- ─── CUSTOM CURSOR ────────────────────────────────────────────────────────────
+local function createCursor()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "AresCursor"; sg.DisplayOrder = 1000
+    pcall(function() sg.Parent = gethui() or game:GetService("CoreGui") or lp.PlayerGui end)
+
+    local cursor = Instance.new("Frame")
+    cursor.Size = UDim2.new(0, 0, 0, 0); cursor.BackgroundTransparency = 1; cursor.Parent = sg
+
+    local line1 = Instance.new("Frame")
+    line1.Size = UDim2.new(0, 20, 0, 2); line1.Position = UDim2.new(0, -10, 0, -1); line1.BackgroundColor3 = colors.accent; line1.Rotation = 45; line1.BorderSizePixel = 0; line1.Parent = cursor
+    local line2 = Instance.new("Frame")
+    line2.Size = UDim2.new(0, 20, 0, 2); line2.Position = UDim2.new(0, -10, 0, -1); line2.BackgroundColor3 = colors.accent; line2.Rotation = -45; line2.BorderSizePixel = 0; line2.Parent = cursor
+
+    Instance.new("UIStroke", line1).Color = Color3.new(0,0,0)
+    Instance.new("UIStroke", line2).Color = Color3.new(0,0,0)
+
+    Run.RenderStepped:Connect(function()
+        local mPos = UIS:GetMouseLocation()
+        cursor.Position = UDim2.new(0, mPos.X, 0, mPos.Y - 36)
+        cursor.Visible = sg.Parent.Parent:FindFirstChild("AresV5").Main.Visible
+        UIS.MouseIconEnabled = not cursor.Visible
+    end)
+    return sg
+end
+
 -- ─── UI LIBRARY (GRAY/BLACK) ──────────────────────────────────────────────────
 local UI = {}
 function UI:Create(name)
@@ -336,14 +362,29 @@ function UI:Create(name)
 
     local function makeDraggable(frame)
         local dragging, dragStart, startPos
-        frame.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then dragging=true; dragStart=input.Position; startPos=main.Position end end)
-        UIS.InputChanged:Connect(function(input) if dragging and input.UserInputType==Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
-        end end)
-        UIS.InputEnded:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true; dragStart = input.Position; startPos = main.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        UIS.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local delta = input.Position - dragStart
+                main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
     end
     makeDraggable(sidebar)
+
+    -- Toggle Logic
+    UIS.InputBegan:Connect(function(input, gpe)
+        if not gpe and input.KeyCode == S.MenuKey then
+            main.Visible = not main.Visible
+        end
+    end)
 
     local tabs = {}
     function UI:Tab(name)
@@ -438,6 +479,7 @@ end
 
 -- ─── INIT ─────────────────────────────────────────────────────────────────────
 task.spawn(showIntro)
+createCursor()
 local main = UI:Create("AresV5")
 local combat = UI:Tab("Combat")
 combat:Section("COMBAT")
