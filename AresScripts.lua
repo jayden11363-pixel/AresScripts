@@ -57,13 +57,14 @@ _G.AresPremium = true -- Defaulting to true for V5 revamp as requested
 
 -- ─── UI COLORS ────────────────────────────────────────────────────────────────
 local colors = {
-    bg = Color3.fromRGB(15, 15, 15),
+    bg = Color3.fromRGB(13, 13, 13),
     side = Color3.fromRGB(10, 10, 10),
     card = Color3.fromRGB(20, 20, 20),
-    border = Color3.fromRGB(35, 35, 35),
-    accent = Color3.fromRGB(200, 200, 200),
-    text = Color3.fromRGB(220, 220, 220),
-    dim = Color3.fromRGB(120, 120, 120)
+    border = Color3.fromRGB(30, 30, 30),
+    accent = Color3.fromRGB(245, 50, 120), -- Magenta/Pink
+    text = Color3.fromRGB(240, 240, 240),
+    dim = Color3.fromRGB(150, 150, 150),
+    success = Color3.fromRGB(0, 255, 120)
 }
 
 -- ─── UTILS ────────────────────────────────────────────────────────────────────
@@ -112,6 +113,38 @@ local function closest(fov, pname, vischeck, tc)
         if d < bestd then bestd = d; best = pt end
     end
     return best
+end
+
+-- ─── INTRO SYSTEM ─────────────────────────────────────────────────────────────
+local function showIntro()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "AresIntro"; sg.DisplayOrder = 999
+    pcall(function() sg.Parent = gethui() or game:GetService("CoreGui") or lp.PlayerGui end)
+
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(1, 0, 1, 0); main.BackgroundColor3 = Color3.new(0,0,0); main.Parent = sg
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 100); title.Position = UDim2.new(0, 0, 0.4, 0); title.BackgroundTransparency = 1
+    title.Text = "ARES HUB"; title.TextColor3 = colors.accent; title.Font = Enum.Font.GothamBold; title.TextSize = 60; title.Parent = main
+    title.TextTransparency = 1
+
+    local barBg = Instance.new("Frame")
+    barBg.Size = UDim2.new(0, 300, 0, 4); barBg.Position = UDim2.new(0.5, -150, 0.5, 50); barBg.BackgroundColor3 = colors.card; barBg.BorderSizePixel = 0; barBg.Parent = main
+    
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0, 0, 1, 0); bar.BackgroundColor3 = colors.accent; bar.BorderSizePixel = 0; bar.Parent = barBg
+
+    TweenSvc:Create(title, TweenInfo.new(1), {TextTransparency = 0}):Play()
+    task.wait(0.5)
+    TweenSvc:Create(bar, TweenInfo.new(2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+    task.wait(2.2)
+    TweenSvc:Create(title, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+    TweenSvc:Create(barBg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    TweenSvc:Create(bar, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    TweenSvc:Create(main, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
+    task.wait(0.8)
+    sg:Destroy()
 end
 
 -- ─── MOVEMENT SYSTEMS ─────────────────────────────────────────────────────────
@@ -282,6 +315,25 @@ function UI:Create(name)
     content.Name = "Content"; content.Size = UDim2.new(1, -140, 1, 0); content.Position = UDim2.new(0, 140, 0, 0)
     content.BackgroundTransparency = 1; content.Parent = main
 
+    -- User Profile
+    local profile = Instance.new("Frame")
+    profile.Name = "Profile"; profile.Size = UDim2.new(1, -20, 0, 50); profile.Position = UDim2.new(0, 10, 1, -60); profile.BackgroundColor3 = colors.card; profile.Parent = sidebar
+    Instance.new("UICorner", profile).CornerRadius = UDim.new(0, 6)
+    
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 36, 0, 36); avatar.Position = UDim2.new(0, 7, 0.5, -18); avatar.BackgroundColor3 = colors.bg; avatar.BorderSizePixel = 0; avatar.Parent = profile
+    Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
+    
+    local userId = lp.UserId
+    local thumbType = Enum.ThumbnailType.HeadShot
+    local thumbSize = Enum.ThumbnailSize.Size420x420
+    avatar.Image = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+
+    local name = Instance.new("TextLabel")
+    name.Size = UDim2.new(1, -50, 0, 15); name.Position = UDim2.new(0, 48, 0, 10); name.BackgroundTransparency = 1; name.Text = lp.DisplayName; name.TextColor3 = colors.text; name.Font = Enum.Font.GothamBold; name.TextSize = 12; name.TextXAlignment = Enum.TextXAlignment.Left; name.Parent = profile
+    local rank = Instance.new("TextLabel")
+    rank.Size = UDim2.new(1, -50, 0, 15); rank.Position = UDim2.new(0, 48, 0, 25); rank.BackgroundTransparency = 1; rank.Text = _G.AresPremium and "PREMIUM" or "FREE"; rank.TextColor3 = colors.accent; rank.Font = Enum.Font.Gotham; rank.TextSize = 10; rank.TextXAlignment = Enum.TextXAlignment.Left; rank.Parent = profile
+
     local function makeDraggable(frame)
         local dragging, dragStart, startPos
         frame.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then dragging=true; dragStart=input.Position; startPos=main.Position end end)
@@ -307,17 +359,35 @@ function UI:Create(name)
 
         local elements = {}
         function elements:Toggle(text, key)
-            local t = Instance.new("Frame"); t.Size = UDim2.new(1, 0, 0, 30); t.BackgroundColor3 = colors.card; t.BorderSizePixel = 0; t.Parent = page
-            local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, -40, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = colors.text; lbl.Font = Enum.Font.RobotoMono; lbl.TextSize = 12; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = t
-            local box = Instance.new("TextButton"); box.Size = UDim2.new(0, 20, 0, 20); box.Position = UDim2.new(1, -30, 0.5, -10); box.BackgroundColor3 = colors.bg; box.Text = ""; box.BorderSizePixel = 1; box.BorderColor3 = colors.border; box.Parent = t
+            local t = Instance.new("Frame"); t.Size = UDim2.new(1, 0, 0, 35); t.BackgroundColor3 = colors.card; t.BorderSizePixel = 0; t.Parent = page
+            Instance.new("UICorner", t).CornerRadius = UDim.new(0, 4)
+            local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, -60, 1, 0); lbl.Position = UDim2.new(0, 12, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = colors.text; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = t
+            
+            local box = Instance.new("TextButton"); box.Size = UDim2.new(0, 22, 0, 22); box.Position = UDim2.new(1, -34, 0.5, -11); box.BackgroundColor3 = colors.bg; box.Text = ""; box.BorderSizePixel = 0; box.Parent = t
+            Instance.new("UICorner", box).CornerRadius = UDim.new(0, 4)
+            Instance.new("UIStroke", box).Color = colors.border
+            
             local fill = Instance.new("Frame"); fill.Size = UDim2.new(1, -4, 1, -4); fill.Position = UDim2.new(0, 2, 0, 2); fill.BackgroundColor3 = colors.accent; fill.Visible = S[key]; fill.Parent = box
-            box.MouseButton1Click:Connect(function() S[key] = not S[key]; fill.Visible = S[key] end)
+            Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 3)
+            
+            box.MouseButton1Click:Connect(function() 
+                S[key] = not S[key]; 
+                fill.Visible = S[key]
+                TweenSvc:Create(fill, TweenInfo.new(0.2), {BackgroundTransparency = S[key] and 0 or 1}):Play()
+            end)
         end
+
         function elements:Slider(text, key, min, max)
             local s = Instance.new("Frame"); s.Size = UDim2.new(1, 0, 0, 50); s.BackgroundColor3 = colors.card; s.BorderSizePixel = 0; s.Parent = page
-            local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, -20, 0, 20); lbl.Position = UDim2.new(0, 10, 0, 5); lbl.BackgroundTransparency = 1; lbl.Text = text .. ": " .. tostring(S[key]); lbl.TextColor3 = colors.text; lbl.Font = Enum.Font.RobotoMono; lbl.TextSize = 12; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = s
-            local track = Instance.new("Frame"); track.Size = UDim2.new(1, -20, 0, 6); track.Position = UDim2.new(0, 10, 0, 30); track.BackgroundColor3 = colors.bg; track.BorderSizePixel = 0; track.Parent = s
+            Instance.new("UICorner", s).CornerRadius = UDim.new(0, 4)
+            local lbl = Instance.new("TextLabel"); lbl.Size = UDim2.new(1, -20, 0, 25); lbl.Position = UDim2.new(0, 12, 0, 2); lbl.BackgroundTransparency = 1; lbl.Text = text .. ": " .. tostring(S[key]); lbl.TextColor3 = colors.text; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 12; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Parent = s
+            
+            local track = Instance.new("Frame"); track.Size = UDim2.new(1, -24, 0, 6); track.Position = UDim2.new(0, 12, 0, 32); track.BackgroundColor3 = colors.bg; track.BorderSizePixel = 0; track.Parent = s
+            Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+            
             local fill = Instance.new("Frame"); fill.Size = UDim2.new((S[key]-min)/(max-min), 0, 1, 0); fill.BackgroundColor3 = colors.accent; fill.BorderSizePixel = 0; fill.Parent = track
+            Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+            
             local input = Instance.new("TextButton"); input.Size = UDim2.new(1, 0, 1, 0); input.BackgroundTransparency = 1; input.Text = ""; input.Parent = track
             local dragging = false
             input.MouseButton1Down:Connect(function() dragging = true end)
@@ -327,9 +397,17 @@ function UI:Create(name)
                 local val = math.floor(min + (max-min)*rel); S[key] = val; fill.Size = UDim2.new(rel, 0, 1, 0); lbl.Text = text .. ": " .. tostring(val)
             end end)
         end
+
         function elements:Section(text)
+            local container = Instance.new("Frame")
+            container.Size = UDim2.new(1, 0, 0, 25); container.BackgroundTransparency = 1; container.Parent = page
+            
             local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(1, 0, 0, 25); label.BackgroundTransparency = 1; label.Text = text; label.TextColor3 = colors.dim; label.Font = Enum.Font.RobotoMono; label.TextSize = 10; label.TextXAlignment = Enum.TextXAlignment.Left; label.Parent = page
+            label.Size = UDim2.new(1, -30, 1, 0); label.Position = UDim2.new(0, 5, 0, 0); label.BackgroundTransparency = 1; label.Text = text:upper(); label.TextColor3 = colors.accent; label.Font = Enum.Font.GothamBold; label.TextSize = 11; label.TextXAlignment = Enum.TextXAlignment.Left; label.Parent = container
+            
+            local qmark = Instance.new("TextLabel")
+            qmark.Size = UDim2.new(0, 20, 0, 20); qmark.Position = UDim2.new(1, -20, 0.5, -10); qmark.BackgroundTransparency = 0.9; qmark.BackgroundColor3 = colors.text; qmark.Text = "?"; qmark.TextColor3 = colors.dim; qmark.Font = Enum.Font.GothamBold; qmark.TextSize = 10; qmark.Parent = container
+            Instance.new("UICorner", qmark).CornerRadius = UDim.new(1, 0)
         end
         return elements
     end
@@ -359,6 +437,7 @@ local function showAuth(main)
 end
 
 -- ─── INIT ─────────────────────────────────────────────────────────────────────
+task.spawn(showIntro)
 local main = UI:Create("AresV5")
 local combat = UI:Tab("Combat")
 combat:Section("COMBAT")
